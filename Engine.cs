@@ -19,6 +19,9 @@ public class Engine
 
     private Level _currentLevel = new();
     private PlayerObject? _player;
+    private int _score = 0;
+    private int _lastRenderedScore = -1;
+
 
     private DateTimeOffset _lastUpdate = DateTimeOffset.Now;
 
@@ -104,9 +107,10 @@ public class Engine
         _scriptEngine.ExecuteAll(this);
 
         if (addBomb)
-        {
-            AddBomb(_player.Position.X, _player.Position.Y, false);
-        }
+            {
+                AddBomb(_player.Position.X, _player.Position.Y, false);
+            }
+
     }
 
     public void RenderFrame()
@@ -119,6 +123,11 @@ public class Engine
 
         RenderTerrain();
         RenderAllObjects();
+        if (_score != _lastRenderedScore)
+{
+    _renderer.RenderText($"Score: {_score}", 20, 60);
+    _lastRenderedScore = _score;
+}
 
         _renderer.PresentFrame();
     }
@@ -147,13 +156,24 @@ public class Engine
             var tempGameObject = (TemporaryGameObject)gameObject!;
             var deltaX = Math.Abs(_player.Position.X - tempGameObject.Position.X);
             var deltaY = Math.Abs(_player.Position.Y - tempGameObject.Position.Y);
-            if (deltaX < 32 && deltaY < 32)
+
+           if (deltaX < 32 && deltaY < 32)
             {
-                _player.GameOver();
+                _player.LoseLife();
             }
+            else
+            {
+                _score += 10;
+            }
+
         }
 
         _player?.Render(_renderer);
+                    if (_player != null)
+            {
+                _renderer.DrawLivesWithImage(_player.Lives);
+            }
+
     }
 
     public void RenderTerrain()

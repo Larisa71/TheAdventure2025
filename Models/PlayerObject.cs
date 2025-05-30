@@ -25,6 +25,8 @@ public class PlayerObject : RenderableGameObject
     }
 
     public (PlayerState State, PlayerStateDirection Direction) State { get; private set; }
+    public int Lives { get; private set; } = 3;
+
 
     public PlayerObject(SpriteSheet spriteSheet, int x, int y) : base(spriteSheet, (x, y))
     {
@@ -65,6 +67,33 @@ public class PlayerObject : RenderableGameObject
 
         State = (state, direction);
     }
+private DateTime _lastHitTime = DateTime.MinValue;
+
+public void LoseLife()
+{
+    // Prevenim scăderi după GameOver
+    if (State.State == PlayerState.GameOver)
+        return;
+
+    if ((DateTime.Now - _lastHitTime).TotalSeconds < 1)
+        return;
+
+    _lastHitTime = DateTime.Now;
+
+    Lives--;
+    Console.WriteLine($"[LoseLife] Lives now: {Lives}");
+
+    if (Lives <= 0)
+    {
+        SetState(PlayerState.GameOver);
+    }
+    else
+    {
+        SetState(PlayerState.Idle, State.Direction);
+    }
+}
+
+
 
     public void GameOver()
     {

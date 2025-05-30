@@ -5,6 +5,7 @@ using SixLabors.ImageSharp.PixelFormats;
 using TheAdventure.Models;
 using Point = Silk.NET.SDL.Point;
 
+
 namespace TheAdventure;
 
 public unsafe class GameRenderer
@@ -21,10 +22,10 @@ public unsafe class GameRenderer
     public GameRenderer(Sdl sdl, GameWindow window)
     {
         _sdl = sdl;
-        
+
         _renderer = (Renderer*)window.CreateRenderer();
         _sdl.SetRenderDrawBlendMode(_renderer, BlendMode.Blend);
-        
+
         _window = window;
         var windowSize = window.Size;
         _camera = new Camera(windowSize.Width, windowSize.Height);
@@ -60,16 +61,16 @@ public unsafe class GameRenderer
                 {
                     throw new Exception("Failed to create surface from image data.");
                 }
-                
+
                 var imageTexture = _sdl.CreateTextureFromSurface(_renderer, imageSurface);
                 if (imageTexture == null)
                 {
                     _sdl.FreeSurface(imageSurface);
                     throw new Exception("Failed to create texture from surface.");
                 }
-                
+
                 _sdl.FreeSurface(imageSurface);
-                
+
                 _textureData[_textureId] = textureInfo;
                 _texturePointers[_textureId] = (IntPtr)imageTexture;
             }
@@ -77,6 +78,11 @@ public unsafe class GameRenderer
 
         return _textureId++;
     }
+    public void RenderText(string text, int x, int y)
+{
+    Console.WriteLine($"[RenderText] {text} at ({x},{y})"); // momentan afișăm doar în consolă
+}
+
 
     public void RenderTexture(int textureId, Rectangle<int> src, Rectangle<int> dst,
         RendererFlip flip = RendererFlip.None, double angle = 0.0, Point center = default)
@@ -88,6 +94,25 @@ public unsafe class GameRenderer
                 in translatedDst,
                 angle,
                 in center, flip);
+        }
+    }
+    public void RenderTextureScreenSpace(int textureId, Rectangle<int> src, Rectangle<int> dest)
+    {
+        if (_texturePointers.TryGetValue(textureId, out var imageTexture))
+        {
+            _sdl.RenderCopy(_renderer, (Texture*)imageTexture, in src, in dest);
+        }
+    }
+    public void DrawLivesWithImage(int lives, int startX = 10, int startY = 10)
+    {
+        int heartTextureId = LoadTexture("Assets/heart.png", out _);
+
+        for (int i = 0; i < lives; i++)
+        {
+            // Micșorăm la 32x32 px și poziționăm sus-stânga
+            var dest = new Rectangle<int>(startX + i * 36, startY, 32, 32);
+            var src = new Rectangle<int>(0, 0, 48, 48); // imaginea ta e 48x48, dar noi o afișăm mai mică
+            RenderTextureScreenSpace(heartTextureId, src, dest);
         }
     }
 
@@ -111,3 +136,4 @@ public unsafe class GameRenderer
         _sdl.RenderPresent(_renderer);
     }
 }
+
