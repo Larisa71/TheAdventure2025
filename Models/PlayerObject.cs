@@ -93,6 +93,10 @@ public void LoseLife()
     }
 }
 
+public void GainLife()
+{
+    Lives++;
+}
 
 
     public void GameOver()

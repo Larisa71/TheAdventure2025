@@ -12,6 +12,9 @@ public class Engine
     private readonly GameRenderer _renderer;
     private readonly Input _input;
     private readonly ScriptEngine _scriptEngine = new();
+    private int _highScore = 0;
+    private double _timeSinceLastHeart = 0;
+private readonly double _heartSpawnInterval = 10000; 
 
     private readonly Dictionary<int, GameObject> _gameObjects = new();
     private readonly Dictionary<string, TileSet> _loadedTileSets = new();
@@ -60,6 +63,7 @@ public class Engine
 
         _player = new(SpriteSheet.Load(_renderer, "Player.json", "Assets"), 100, 100);
         _player = new(SpriteSheet.Load(_renderer, "Player.json", "Assets"), 100, 100);
+        
 
         var levelContent = File.ReadAllText(Path.Combine("Assets", "terrain.tmj"));
         var level = JsonSerializer.Deserialize<Level>(levelContent);
@@ -102,12 +106,15 @@ public class Engine
         _currentLevel = level;
 
         _scriptEngine.LoadAll(Path.Combine("Assets", "Scripts"));
+        AddHeart(400, 300); 
         _renderer.LoadRestartButton();
         _renderer.LoadGameOverImage();
         _isGameOver = false;
+        AudioManager.Init();
+
 
     }
-    
+
     public void ProcessFrame()
     {
         var currentTime = DateTimeOffset.Now;
@@ -138,6 +145,18 @@ public class Engine
         {
             AddBomb(_player.Position.X, _player.Position.Y, false);
         }
+        
+        
+_timeSinceLastHeart += msSinceLastFrame;
+if (_timeSinceLastHeart >= _heartSpawnInterval)
+{
+    _timeSinceLastHeart = 0;
+    var rand = new Random();
+    int x = rand.Next(100, 800); 
+    int y = rand.Next(100, 600);
+    AddHeart(x, y);
+}
+
 
     }
 
@@ -152,38 +171,59 @@ public class Engine
         RenderTerrain();
         RenderAllObjects();
         _renderer.RenderTextCrossPlatform($"Score: {_score}", 20, 20);
+        _renderer.RenderTextCrossPlatform($"High Score: {_highScore}", 20, 50);
+
 
         _renderer.RenderRestartButton();
-        if (_isGameOver)
-            {
-                _renderer.RenderGameOverImage();
-            }
+      if (_isGameOver)
+        {
+            _renderer.RenderGameOverImage();
+            _renderer.RenderTextCrossPlatform($"Final Score: {_score}", 20, 80);
+        }
 
         _renderer.PresentFrame();
     }
+public void RenderAllObjects()
+{
+    var toRemove = new List<int>();
 
-    public void RenderAllObjects()
+    foreach (var gameObject in GetRenderables())
     {
-        var toRemove = new List<int>();
-        foreach (var gameObject in GetRenderables())
+        gameObject.Render(_renderer);
+
+     if (gameObject is RenderableGameObject heart && heart.SpriteSheet != null &&
+    heart.SpriteSheet.FrameWidth == 32 &&
+    heart.SpriteSheet.FrameHeight == 32 &&
+    _player != null)
+
+
         {
-            gameObject.Render(_renderer);
-            if (gameObject is TemporaryGameObject { IsExpired: true } tempGameObject)
+            var deltaX = Math.Abs(_player.Position.X - gameObject.Position.X);
+            var deltaY = Math.Abs(_player.Position.Y - gameObject.Position.Y);
+
+            if (deltaX < 32 && deltaY < 32)
             {
-                toRemove.Add(tempGameObject.Id);
+                _player.GainLife(); 
+                toRemove.Add(gameObject.Id);
             }
         }
 
-        foreach (var id in toRemove)
+        // 💣 Verificare bombă temporară
+        if (gameObject is TemporaryGameObject { IsExpired: true } tempGameObject)
         {
-            _gameObjects.Remove(id, out var gameObject);
+            toRemove.Add(tempGameObject.Id);
+        }
+    }
 
-            if (_player == null)
-            {
-                continue;
-            }
+    foreach (var id in toRemove)
+    {
+        _gameObjects.Remove(id, out var gameObject);
 
-            var tempGameObject = (TemporaryGameObject)gameObject!;
+        if (_player == null)
+            continue;
+
+        if (gameObject is TemporaryGameObject tempGameObject)
+        {
             var deltaX = Math.Abs(_player.Position.X - tempGameObject.Position.X);
             var deltaY = Math.Abs(_player.Position.Y - tempGameObject.Position.Y);
 
@@ -195,21 +235,34 @@ public class Engine
             {
                 _score += 10;
             }
+
+            AudioManager.PlayExplosion();
+
             if (_player.Lives <= 0)
-                {
-                    _isGameOver = true;
-                }
-
-
+            {
+                _isGameOver = true;
+            }
         }
-
-        _player?.Render(_renderer);
-        if (_player != null)
-        {
-            _renderer.DrawLivesWithImage(_player.Lives);
-        }
-
     }
+
+    _player?.Render(_renderer);
+
+    if (_player != null)
+    {
+        _renderer.DrawLivesWithImage(_player.Lives);
+    }
+
+    if (_player != null && _player.Lives <= 0)
+    {
+        _isGameOver = true;
+
+        if (_score > _highScore)
+        {
+            _highScore = _score;
+        }
+    }
+}
+
 
     public void RenderTerrain()
     {
@@ -271,11 +324,23 @@ public class Engine
         _gameObjects.Add(bomb.Id, bomb);
     }
     public void RestartGame()
+    {
+        _gameObjects.Clear();
+        _score = 0;
+        _isGameOver = false;
+        SetupWorld();
+    }
+public void AddHeart(int x, int y, bool translateCoordinates = true)
 {
-    _gameObjects.Clear();        
-    _score = 0;     
-    _isGameOver = false;
-    SetupWorld();                
+    var worldCoords = translateCoordinates ? _renderer.ToWorldCoordinates(x, y) : new Vector2D<int>(x, y);
+
+    var spriteSheet = SpriteSheet.Load(_renderer, "Heart.json", "Assets");
+    spriteSheet.ActivateAnimation("Heart"); // ← AICI activezi animația
+
+    RenderableGameObject heart = new(spriteSheet, (worldCoords.X, worldCoords.Y));
+    _gameObjects.Add(heart.Id, heart);
 }
+
+
 
 }
