@@ -20,7 +20,6 @@ public class Engine
     private Level _currentLevel = new();
     private PlayerObject? _player;
     private int _score = 0;
-    private int _lastRenderedScore = -1;
     private bool _isGameOver = false;
 
 
@@ -152,11 +151,8 @@ public class Engine
 
         RenderTerrain();
         RenderAllObjects();
-        if (_score != _lastRenderedScore)
-        {
-            _renderer.RenderText($"Score: {_score}", 20, 60);
-            _lastRenderedScore = _score;
-        }
+        _renderer.RenderTextCrossPlatform($"Score: {_score}", 20, 20);
+
         _renderer.RenderRestartButton();
         if (_isGameOver)
             {

@@ -4,6 +4,10 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using TheAdventure.Models;
 using Point = Silk.NET.SDL.Point;
+using SixLabors.ImageSharp.Processing;
+using SixLabors.ImageSharp.Drawing.Processing;
+using SixLabors.Fonts;
+
 
 
 namespace TheAdventure;
@@ -33,6 +37,9 @@ private GameWindow _window;
         var windowSize = window.Size;
         _camera = new Camera(windowSize.Width, windowSize.Height);
     }
+
+
+
 private int _restartTextureId;
 private TextureData _restartTextureData;
 private int _gameOverTextureId;
@@ -165,22 +172,70 @@ public void LoadRestartButton()
 
         RenderTextureScreenSpace(_restartTextureId, src, dest);
     }
-public void RenderGameOverImage()
+    public void RenderGameOverImage()
+    {
+        var screenWidth = _window.Size.Width;
+        var screenHeight = _window.Size.Height;
+
+        var imageWidth = 300;
+        var imageHeight = 100;
+
+        var x = (screenWidth - imageWidth) / 2;
+        var y = (screenHeight - imageHeight) / 2;
+
+        var src = new Rectangle<int>(0, 0, _gameOverTextureData.Width, _gameOverTextureData.Height);
+        var dest = new Rectangle<int>(x, y, imageWidth, imageHeight);
+
+        RenderTextureScreenSpace(_gameOverTextureId, src, dest);
+    }
+public unsafe void RenderTextCrossPlatform(string text, int rightPadding, int topPadding)
 {
-    var screenWidth = _window.Size.Width;
-    var screenHeight = _window.Size.Height;
+    var collection = new FontCollection();
+    var family = collection.Add("Assets/DejaVuSans.ttf");
+    var font = family.CreateFont(24);
+    var textColor = SixLabors.ImageSharp.Color.White;
 
-    var imageWidth = 300;
-    var imageHeight = 100;
+    using var img = new Image<Rgba32>(300, 50);
+    img.Mutate(ctx =>
+    {
+        ctx.Fill(SixLabors.ImageSharp.Color.Transparent);
+        ctx.DrawText(text, font, textColor, new SixLabors.ImageSharp.PointF(0, 0));
+    });
 
-    var x = (screenWidth - imageWidth) / 2;
-    var y = (screenHeight - imageHeight) / 2;
+    var rawData = new byte[img.Width * img.Height * 4];
+    img.CopyPixelDataTo(rawData);
 
-    var src = new Rectangle<int>(0, 0, _gameOverTextureData.Width, _gameOverTextureData.Height);
-    var dest = new Rectangle<int>(x, y, imageWidth, imageHeight);
+    fixed (byte* dataPtr = rawData)
+    {
+        var surface = _sdl.CreateRGBSurfaceWithFormatFrom(
+            dataPtr,
+            img.Width,
+            img.Height,
+            32,
+            img.Width * 4,
+            (uint)PixelFormatEnum.Abgr8888
+        );
 
-    RenderTextureScreenSpace(_gameOverTextureId, src, dest);
+        if (surface == null)
+            throw new Exception("Failed to create text surface.");
+
+        var texture = _sdl.CreateTextureFromSurface(_renderer, surface);
+        _sdl.FreeSurface(surface);
+
+        var screenWidth = _window.Size.Width;
+        var dstRect = new Rectangle<int>(
+            screenWidth - img.Width - rightPadding,
+            topPadding,
+            img.Width,
+            img.Height
+        );
+
+        var srcRect = new Rectangle<int>(0, 0, img.Width, img.Height);
+        _sdl.RenderCopyEx(_renderer, (Texture*)texture, in srcRect, in dstRect, 0, null, RendererFlip.None);
+        _sdl.DestroyTexture((Texture*)texture);
+    }
 }
+
 
 }
 
