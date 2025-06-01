@@ -8,11 +8,14 @@ using Point = Silk.NET.SDL.Point;
 
 namespace TheAdventure;
 
+
 public unsafe class GameRenderer
 {
-    private Sdl _sdl;
-    private Renderer* _renderer;
-    private GameWindow _window;
+
+  private Sdl _sdl;
+private Renderer* _renderer;
+private GameWindow _window;
+
     private Camera _camera;
 
     private Dictionary<int, IntPtr> _texturePointers = new();
@@ -30,6 +33,20 @@ public unsafe class GameRenderer
         var windowSize = window.Size;
         _camera = new Camera(windowSize.Width, windowSize.Height);
     }
+private int _restartTextureId;
+private TextureData _restartTextureData;
+private int _gameOverTextureId;
+private TextureData _gameOverTextureData;
+public void LoadGameOverImage()
+{
+    _gameOverTextureId = LoadTexture("Assets/gameover.png", out _gameOverTextureData);
+}
+
+public void LoadRestartButton()
+{
+    _restartTextureId = LoadTexture("Assets/restart.png", out _restartTextureData);
+}
+
 
     public void SetWorldBounds(Rectangle<int> bounds)
     {
@@ -79,9 +96,9 @@ public unsafe class GameRenderer
         return _textureId++;
     }
     public void RenderText(string text, int x, int y)
-{
-    Console.WriteLine($"[RenderText] {text} at ({x},{y})"); // momentan afișăm doar în consolă
-}
+    {
+        Console.WriteLine($"[RenderText] {text} at ({x},{y})"); // momentan afișăm doar în consolă
+    }
 
 
     public void RenderTexture(int textureId, Rectangle<int> src, Rectangle<int> dst,
@@ -135,5 +152,35 @@ public unsafe class GameRenderer
     {
         _sdl.RenderPresent(_renderer);
     }
+    public void RenderRestartButton()
+    {
+        var desiredWidth = 120;
+        var desiredHeight = 40;
+
+        var x = 5; // colț stânga
+        var y = 30; // mai jos (sub inimioare și scor)
+
+        var src = new Rectangle<int>(0, 0, _restartTextureData.Width, _restartTextureData.Height);
+        var dest = new Rectangle<int>(x, y, desiredWidth, desiredHeight);
+
+        RenderTextureScreenSpace(_restartTextureId, src, dest);
+    }
+public void RenderGameOverImage()
+{
+    var screenWidth = _window.Size.Width;
+    var screenHeight = _window.Size.Height;
+
+    var imageWidth = 300;
+    var imageHeight = 100;
+
+    var x = (screenWidth - imageWidth) / 2;
+    var y = (screenHeight - imageHeight) / 2;
+
+    var src = new Rectangle<int>(0, 0, _gameOverTextureData.Width, _gameOverTextureData.Height);
+    var dest = new Rectangle<int>(x, y, imageWidth, imageHeight);
+
+    RenderTextureScreenSpace(_gameOverTextureId, src, dest);
+}
+
 }
 

@@ -109,50 +109,63 @@ public class ScriptEngine
         }
     }
 
-    private IScript? Load(string file)
+ private IScript? Load(string file)
+{
+    Console.WriteLine($"Loading script {file}");
+    FileInfo fileInfo = new FileInfo(file);
+    var fileOutput = fileInfo.FullName.Replace(fileInfo.Extension, ".dll");
+    var code = File.ReadAllText(fileInfo.FullName);
+    var syntaxTree = CSharpSyntaxTree.ParseText(code);
+    var compilation = CSharpCompilation.Create(fileInfo.Name.Replace(fileInfo.Extension, string.Empty),
+        new[] { syntaxTree },
+        _scriptReferences, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+    using (var compiledScriptAssembly = new FileStream(fileOutput, FileMode.Create))
     {
-        Console.WriteLine($"Loading script {file}");
-        FileInfo fileInfo = new FileInfo(file);
-        var fileOutput = fileInfo.FullName.Replace(fileInfo.Extension, ".dll");
-        var code = File.ReadAllText(fileInfo.FullName);
-        var syntaxTree = CSharpSyntaxTree.ParseText(code);
-        var compilation = CSharpCompilation.Create(fileInfo.Name.Replace(fileInfo.Extension, string.Empty),
-            new[] { syntaxTree },
-            _scriptReferences, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        using (var compiledScriptAssembly = new FileStream(fileOutput, FileMode.OpenOrCreate))
+        var result = compilation.Emit(compiledScriptAssembly);
+        if (!result.Success)
         {
-            var result = compilation.Emit(compiledScriptAssembly);
-            if (!result.Success)
+            foreach (var diag in result.Diagnostics)
             {
-                foreach (var diag in result.Diagnostics)
+                if (diag.Severity == DiagnosticSeverity.Error)
                 {
-                    if (diag.Severity == DiagnosticSeverity.Error)
-                    {
-                        Console.WriteLine(string.Join(";", diag.Descriptor.CustomTags));
-                        Console.WriteLine(
-                            $"{diag.Descriptor.MessageFormat.ToString()} - {code.Substring(diag.Location.SourceSpan.Start, diag.Location.SourceSpan.Length)} - {diag.Descriptor.HelpLinkUri.ToString()} - {diag.Location.ToString()}");
-                    }
+                    Console.WriteLine(string.Join(";", diag.Descriptor.CustomTags));
+                    Console.WriteLine(
+                        $"{diag.Descriptor.MessageFormat.ToString()} - {code.Substring(diag.Location.SourceSpan.Start, diag.Location.SourceSpan.Length)} - {diag.Descriptor.HelpLinkUri.ToString()} - {diag.Location.ToString()}");
                 }
-
-                throw new FileLoadException(file);
             }
+
+            throw new FileLoadException(file);
         }
-
-        foreach (var type in Assembly.LoadFile(fileOutput).GetTypes())
-        {
-            if (type.IsAssignableTo(typeof(IScript)))
-            {
-                var instance = (IScript?)type.GetConstructor(Type.EmptyTypes)?.Invoke(null);
-                if (instance != null)
-                {
-                    instance.Initialize();
-                    _scripts.Add(file, instance);
-                }
-
-                return instance;
-            }
-        }
-
-        return null;
     }
+
+    // Citește DLL-ul în memorie pentru a nu-l bloca pe disc
+    byte[] assemblyBytes = File.ReadAllBytes(fileOutput);
+    var assembly = Assembly.Load(assemblyBytes);
+
+    foreach (var type in assembly.GetTypes())
+    {
+        if (type.IsAssignableTo(typeof(IScript)))
+        {
+            var instance = (IScript?)type.GetConstructor(Type.EmptyTypes)?.Invoke(null);
+            if (instance != null)
+            {
+                instance.Initialize();
+
+                // Înlocuiește dacă există deja scriptul înregistrat
+                if (_scripts.ContainsKey(file))
+                {
+                    _scripts.Remove(file);
+                }
+
+                _scripts.Add(file, instance);
+            }
+
+            return instance;
+        }
+    }
+
+    return null;
+}
+
 }

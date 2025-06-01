@@ -22,6 +22,9 @@ public static class Program
             var input = new Input(sdl);
             var gameRenderer = new GameRenderer(sdl, gameWindow);
             var engine = new Engine(gameRenderer, input);
+            gameRenderer.LoadRestartButton();
+
+
 
             engine.SetupWorld();
 

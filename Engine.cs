@@ -21,20 +21,45 @@ public class Engine
     private PlayerObject? _player;
     private int _score = 0;
     private int _lastRenderedScore = -1;
+    private bool _isGameOver = false;
+
 
 
     private DateTimeOffset _lastUpdate = DateTimeOffset.Now;
 
-    public Engine(GameRenderer renderer, Input input)
-    {
-        _renderer = renderer;
-        _input = input;
+   public Engine(GameRenderer renderer, Input input)
+{
+    _renderer = renderer;
+    _input = input;
 
-        _input.OnMouseClick += (_, coords) => AddBomb(coords.x, coords.y);
-    }
+    _input.OnMouseClick += (_, coords) =>
+    {
+        int resetX = 5;
+        int resetY = 30;
+        int resetWidth = 120;
+        int resetHeight = 40;
+
+        if (coords.x >= resetX && coords.x <= resetX + resetWidth &&
+            coords.y >= resetY && coords.y <= resetY + resetHeight)
+        {
+            Console.WriteLine(">>> CLICK pe RESET");
+            RestartGame();
+        }
+        else
+        {
+            AddBomb(coords.x, coords.y);
+        }
+    };
+}
+
 
     public void SetupWorld()
     {
+        _gameObjects.Clear();
+        _tileIdMap.Clear();
+        _loadedTileSets.Clear();
+
+        _player = new(SpriteSheet.Load(_renderer, "Player.json", "Assets"), 100, 100);
         _player = new(SpriteSheet.Load(_renderer, "Player.json", "Assets"), 100, 100);
 
         var levelContent = File.ReadAllText(Path.Combine("Assets", "terrain.tmj"));
@@ -78,8 +103,12 @@ public class Engine
         _currentLevel = level;
 
         _scriptEngine.LoadAll(Path.Combine("Assets", "Scripts"));
-    }
+        _renderer.LoadRestartButton();
+        _renderer.LoadGameOverImage();
+        _isGameOver = false;
 
+    }
+    
     public void ProcessFrame()
     {
         var currentTime = DateTimeOffset.Now;
@@ -103,13 +132,13 @@ public class Engine
         {
             _player.Attack();
         }
-        
+
         _scriptEngine.ExecuteAll(this);
 
         if (addBomb)
-            {
-                AddBomb(_player.Position.X, _player.Position.Y, false);
-            }
+        {
+            AddBomb(_player.Position.X, _player.Position.Y, false);
+        }
 
     }
 
@@ -124,10 +153,15 @@ public class Engine
         RenderTerrain();
         RenderAllObjects();
         if (_score != _lastRenderedScore)
-{
-    _renderer.RenderText($"Score: {_score}", 20, 60);
-    _lastRenderedScore = _score;
-}
+        {
+            _renderer.RenderText($"Score: {_score}", 20, 60);
+            _lastRenderedScore = _score;
+        }
+        _renderer.RenderRestartButton();
+        if (_isGameOver)
+            {
+                _renderer.RenderGameOverImage();
+            }
 
         _renderer.PresentFrame();
     }
@@ -157,7 +191,7 @@ public class Engine
             var deltaX = Math.Abs(_player.Position.X - tempGameObject.Position.X);
             var deltaY = Math.Abs(_player.Position.Y - tempGameObject.Position.Y);
 
-           if (deltaX < 32 && deltaY < 32)
+            if (deltaX < 32 && deltaY < 32)
             {
                 _player.LoseLife();
             }
@@ -165,14 +199,19 @@ public class Engine
             {
                 _score += 10;
             }
+            if (_player.Lives <= 0)
+                {
+                    _isGameOver = true;
+                }
+
 
         }
 
         _player?.Render(_renderer);
-                    if (_player != null)
-            {
-                _renderer.DrawLivesWithImage(_player.Lives);
-            }
+        if (_player != null)
+        {
+            _renderer.DrawLivesWithImage(_player.Lives);
+        }
 
     }
 
@@ -235,4 +274,12 @@ public class Engine
         TemporaryGameObject bomb = new(spriteSheet, 2.1, (worldCoords.X, worldCoords.Y));
         _gameObjects.Add(bomb.Id, bomb);
     }
+    public void RestartGame()
+{
+    _gameObjects.Clear();        
+    _score = 0;     
+    _isGameOver = false;
+    SetupWorld();                
+}
+
 }
